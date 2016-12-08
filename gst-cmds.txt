@@ -1,0 +1,39 @@
+gst-launch-1.0 filesrc location=wav_sink/audio_pipe ! "audio/x-raw, format=(string)S16LE, layout=(string)interleaved, channels=(int)1, rate=(int)22050" ! alsasink
+
+gst-launch-1.0 -v filesrc location=wav_sink/audio_pipe ! "audio/x-raw, format=(string)S16LE, layout=(string)interleaved, channels=(int)1, rate=(int)22050" ! audioresample ! audioconvert ! rtpL16pay pt=10 ! application/x-rtp, pt=10, encoding-name=L16, payload=10, clock-rate=44100, channels=2 ! udpsink host=localhost port=5555
+
+gst-launch-1.0 audiotestsrc freq=1000 ! mulawenc ! rtppcmupay ! udpsink host=localhost port=5555
+
+gst-launch-1.0 filesrc location=wav_sink/audio_pipe ! "audio/x-raw, format=(string)S16LE, layout=(string)interleaved, channels=(int)1, rate=(int)22050" ! mulawenc ! rtppcmupay ! udpsink host=localhost port=5555
+
+(while cat hello.raw; do :; done) > myfifo
+
+## espeak ##
+
+Caps
+"audio/x-raw, format=(string)S16LE, layout=(string)interleaved, channels=(int)1, rate=(int)22050"
+
+## Let's get it on ##
+
+### Working ###
+
+Caps
+"audio/x-raw, format=(string)U8, layout=(string)interleaved, channels=(int)1, rate=(int)44100"
+
+Wav -> Speakers
+gst-launch-1.0 filesrc location=audio.wav ! wavparse ! alsasink
+
+Raw -> Speakers
+gst-launch-1.0 filesrc location=audio.raw ! "audio/x-raw, format=(string)U8, layout=(string)interleaved, channels=(int)1, rate=(int)44100" ! alsasink
+
+Wav -> RTP
+gst-launch-1.0 filesrc location=audio.wav ! wavparse ! audioconvert ! rtpL16pay pt=10 ! application/x-rtp, channels=2 ! udpsink host=localhost port=5555
+
+Raw -> RTP (bad, transmits everything in an instant)
+gst-launch-1.0 filesrc location=audio.raw ! "audio/x-raw, format=(string)U8, layout=(string)interleaved, channels=(int)1, rate=(int)44100" ! audioconvert ! rtpL16pay pt=10 ! application/x-rtp, channels=2 ! udpsink host=localhost port=5555
+
+Raw -> RTP (timestamped)
+gst-launch-1.0 filesrc location=audio.raw ! audioparse raw-format=u8 rate=44100 channels=1 ! audioconvert ! rtpL16pay pt=10 ! application/x-rtp, channels=2 ! udpsink host=localhost port=5555
+
+Raw -> RTP (timestamped, queued, rtpL16pay caps provide SDP)
+gst-launch-1.0 -v filesrc location=wav_sink/audio_pipe ! audioparse raw-format=s16le rate=22050 channels=1 ! queue2 ! audioresample ! audioconvert ! rtpL16pay pt=10 ! application/x-rtp, pt=10, encoding-name=L16, payload=10, clock-rate=44100, channels=2 ! udpsink host=localhost port=5555
