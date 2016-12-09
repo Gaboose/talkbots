@@ -5,26 +5,71 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import asyncio, functools
 
-__doc__ = """
-Watches wav_sink for wav files and feeds their raw frames to wav_sink/audio_pipe
-for the gst pipeline to consume.
-"""
-
 audio_pipe = None
 socket = None
 aioloop = None
+clip_queue = asyncio.Queue()
 
-# Consumer-side back-pressure
-# I.e. Send a request for another wav after a given amount of time
-def request_more(seconds):
+async def pipe_feed():
+    SAMPLERATE = 22050
 
-    def blocking():
-        time.sleep(max(0, seconds-1.0))
-        socket.send_string('gimme moar')
+    audio_pipe.write(bytes(SAMPLERATE*16))
+
+    global audio_pipe
+    last = int(time.time()*SAMPLERATE)
+    samples_behind = 0
+    while True:
+        try:
+            data = await asyncio.wait_for(clip_queue.get(), 1.0)
+            audio_pipe.write(data)
+            samples_behind -= len(data)
+        except asyncio.TimeoutError:
+            now = int(time.time()*SAMPLERATE)
+            samples_behind += now - last
+            last = now
+
+            if samples_behind > 0:
+                audio_pipe.write(bytes(samples_behind * 2))
+                samples_behind = 0
+
+    # Send raw frames to gstreamer for rtp transmission
+    # global audio_pipe
+    # while True:
+    #     try:
+    #         audio_pipe.write(raw)
+    #         break
+    #     except BrokenPipeError:
+    #         print("pipe broken. reopening...")
+    #         audio_pipe = open(str(workdir.joinpath('audio_pipe')), 'wb')
+    # audio_pipe.flush()
+
+async def consume_wav(filename):
+    print(filename)
+
+    # Read raw frames of the wav file
+    with wave.open(filename, 'rb') as wf:
+        raw = wf.readframes(wf.getnframes())
+        duration = wf.getnframes()/wf.getframerate()
+        print("duration: {0:.2f}s".format(duration))
     
+    # Remove wav file
+    os.remove(filename)
+    
+    # Request another wav
+    request_more(duration)
+
+    await clip_queue.put(raw)
+
+# Send a request for another wav after a given amount of time
+# (consumer-side back-pressure)
+def request_more(seconds):
+    def blocking():
+        time.sleep(max(0, seconds-0.4))
+        socket.send_string('gimme moar')
+
     # socket.send_string will block the thread,
     # so for this function to be asynchronous it must be run in a threadpool executor 
-    aioloop.run_in_executor(None, blocking)
+    aioloop.run_in_executor(None, functools.partial(blocking))
 
 class EventHandler(FileSystemEventHandler):
     
@@ -36,35 +81,22 @@ class EventHandler(FileSystemEventHandler):
         _, ext = os.path.splitext(filename)
         if ext != '.wav':
             return
-
-        print(filename)
-
-        # Read raw frames of the wav file
-        with wave.open(filename, 'rb') as wf:
-            raw = wf.readframes(wf.getnframes())
-            duration = wf.getnframes()/wf.getframerate()
-            print("duration: {0:.2f}s".format(duration))
         
-        # Remove wav file
-        os.remove(filename)
-
-        # Schedule a request for another wav
         aioloop.call_soon_threadsafe(
-            functools.partial(
-                request_more,
-                duration
-        ))
+            asyncio.Task,
+            consume_wav(filename)
+        )
         
         # Send raw frames to gstreamer for rtp transmission
-        global audio_pipe
-        while True:
-            try:
-                audio_pipe.write(raw)
-                break
-            except BrokenPipeError:
-                print("pipe broken. reopening...")
-                audio_pipe = open(str(workdir.joinpath('audio_pipe')), 'wb')
-        audio_pipe.flush()
+        # global audio_pipe
+        # while True:
+        #     try:
+        #         audio_pipe.write(raw)
+        #         break
+        #     except BrokenPipeError:
+        #         print("pipe broken. reopening...")
+        #         audio_pipe = open(str(workdir.joinpath('audio_pipe')), 'wb')
+        # audio_pipe.flush()
 
 if __name__ == "__main__":
 
@@ -91,7 +123,7 @@ if __name__ == "__main__":
     try:
         aioloop = asyncio.get_event_loop()
         request_more(0)
-        aioloop.run_forever()
+        aioloop.run_until_complete(pipe_feed())
     except KeyboardInterrupt:
         pass
 
