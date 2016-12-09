@@ -3,6 +3,11 @@ import chatterbot.trainers
 import time
 from subprocess import call
 
+__doc__ = """
+Creates wav files with chatterbot and espeak and puts them into
+wav_sink directory for wav_pump.py to consume them.
+"""
+
 import pathlib
 workdir = pathlib.Path(__file__).resolve().parent.joinpath('wav_sink')
 

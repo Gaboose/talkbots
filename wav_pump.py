@@ -5,6 +5,11 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import asyncio, functools
 
+__doc__ = """
+Watches wav_sink for wav files and feeds their raw frames to wav_sink/audio_pipe
+for the gst pipeline to consume.
+"""
+
 audio_pipe = None
 socket = None
 aioloop = None
@@ -14,7 +19,7 @@ aioloop = None
 def request_more(seconds):
 
     def blocking():
-        time.sleep(max(0, seconds-0.4))
+        time.sleep(max(0, seconds-1.0))
         socket.send_string('gimme moar')
     
     # socket.send_string will block the thread,
