@@ -1,0 +1,1 @@
+gst-launch-1.0 filesrc location=wav_sink/audio_pipe do-timestamp=true ! audioparse raw-format=s16le rate=22050 channels=1 ! audiorate ! audioresample ! audioconvert ! rtpL16pay pt=10 ! application/x-rtp, pt=10, encoding-name=L16, payload=10, clock-rate=44100, channels=2 ! udpsink host=${STREAM_TARGET} port=5555
