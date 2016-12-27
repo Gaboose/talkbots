@@ -26,15 +26,15 @@ class AudioProducer:
         self.i += 1
 
 def main():
-    chatbot1 = ChatBot('UK',read_only=True)
-    chatbot2 = ChatBot('US',read_only=True)
+    chatbot1 = ChatBot('UK',read_only=True,database='bot1.db')
+    chatbot2 = ChatBot('US',read_only=True,database='bot2.db')
     voice1 = ['-v', 'en-uk', '-p', '100', '-s', '140']
     voice2 = ['-v', 'en-us', '-p', '40', '-s', '160']
 
     text2speech = AudioProducer()
 
     socket.recv()
-    line_of_dialog = 'The cake is a lie.'
+    line_of_dialog = 'Hello, how are you?'
     text2speech.produce(line_of_dialog, voice2)
     socket.recv()
 

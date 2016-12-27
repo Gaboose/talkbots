@@ -19,7 +19,6 @@ aioloop = None
 def request_more(seconds):
 
     def blocking():
-        time.sleep(max(0, seconds-1.0))
         socket.send_string('gimme moar')
     
     # socket.send_string will block the thread,
@@ -48,12 +47,14 @@ class EventHandler(FileSystemEventHandler):
         # Remove wav file
         os.remove(filename)
 
-        # Schedule a request for another wav
-        aioloop.call_soon_threadsafe(
-            functools.partial(
-                request_more,
-                duration
-        ))
+        # Schedule wavs if there are less than 3
+        wavs = [f for f in os.listdir(str(workdir.resolve())) if f.endswith('.wav')]
+        for i in range(3 - len(wavs)):
+            aioloop.call_soon_threadsafe(
+                functools.partial(
+                    request_more,
+                    duration
+            ))
         
         # Send raw frames to gstreamer for rtp transmission
         global audio_pipe
