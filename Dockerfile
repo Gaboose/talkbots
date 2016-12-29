@@ -15,7 +15,7 @@ ADD . /app
 WORKDIR /app
 
 RUN pip3 install -r requirements.txt && \
-# Creates wav_sink/audio_pipe fifo.
+# Creates wav_sink/audio_pipe fifo and bot1.db, bot2.db files.
 python3 mysetup.py
 
 # IP address to stream audio to. May need to override on runtime. E.g.:

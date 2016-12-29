@@ -10,9 +10,9 @@ Watches wav_sink for wav files and feeds their raw frames to wav_sink/audio_pipe
 for the gst pipeline to consume.
 """
 
-audio_pipe = None
 socket = None
 aioloop = None
+pump = None
 
 # Consumer-side back-pressure
 # I.e. Send a request for another wav after a given amount of time
@@ -24,6 +24,30 @@ def request_more(seconds):
     # socket.send_string will block the thread,
     # so for this function to be asynchronous it must be run in a threadpool executor 
     aioloop.run_in_executor(None, blocking)
+
+
+from itertools import chain, repeat, zip_longest, tee
+
+def grouper(iterable, n, fillvalue=None):
+    "Collect data into fixed-length chunks or blocks"
+    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
+
+def interleave(raw, bytes_per_sample, pan='center'):
+    """ Pan audio frames by interleaving zero-bytes. """
+    if pan == 'left':
+        a = grouper(list(raw), bytes_per_sample)
+        b = repeat((0,)*bytes_per_sample)
+    elif pan == 'right':
+        a = repeat((0,)*bytes_per_sample)
+        b = grouper(list(raw), bytes_per_sample)
+    else:
+        a = grouper(list(raw), bytes_per_sample)
+        a, b = tee(a)
+    
+    c = chain.from_iterable(chain.from_iterable(zip(a, b)))
+    return bytes(c)
 
 class EventHandler(FileSystemEventHandler):
     
@@ -47,25 +71,59 @@ class EventHandler(FileSystemEventHandler):
         # Remove wav file
         os.remove(filename)
 
-        # Schedule wavs if there are less than 3
-        wavs = [f for f in os.listdir(str(workdir.resolve())) if f.endswith('.wav')]
-        for i in range(3 - len(wavs)):
-            aioloop.call_soon_threadsafe(
-                functools.partial(
-                    request_more,
-                    duration
-            ))
+        aioloop.call_soon_threadsafe(
+            functools.partial(
+                request_more,
+                duration
+        ))
+
+        if '/L/' in filename:
+            raw = interleave(raw, 2, 'left')
+        elif '/R/' in filename:
+            raw = interleave(raw, 2, 'right')
+        else:
+            raw = interleave(raw, 2, 'center')
         
         # Send raw frames to gstreamer for rtp transmission
-        global audio_pipe
+        aioloop.call_soon_threadsafe(
+            functools.partial(
+                asyncio.Task,
+                pump.put(raw, duration)
+        ))
+
+class PumpOut:
+
+    def __init__(self, path):
+        self.audio_pipe = open(path, 'wb')
+        self.lagging = 0.0
+
+    # Write wav frames to audio_pipe
+    async def put(self, raw, duration):
+        self.audio_pipe.write(raw)
+        self.audio_pipe.flush()
+        self.lagging -= duration
+    
+    # Ensure audio_pipe is fed with frames even if 'put' calls fall behind real-time
+    async def fill_silence(self):
+        byterate = 44100*2
+        silence = b'\x00'*(byterate//10)
+
+        import random
+        noise = bytes([random.getrandbits(8) for i in range(byterate)])
+
+        last = time.time()
         while True:
-            try:
-                audio_pipe.write(raw)
-                break
-            except BrokenPipeError:
-                print("pipe broken. reopening...")
-                audio_pipe = open(str(workdir.joinpath('audio_pipe')), 'wb')
-        audio_pipe.flush()
+
+            while self.lagging >= 0.1:
+                self.audio_pipe.write(silence)
+                self.audio_pipe.flush()
+                self.lagging -= 0.1
+            
+            await asyncio.sleep(0.1)
+            now = time.time()
+            self.lagging += now - last
+            last = now
+
 
 if __name__ == "__main__":
 
@@ -81,16 +139,17 @@ if __name__ == "__main__":
 
     # Open the audio_pipe in the working directory
     print("opening audio_pipe...")
-    audio_pipe = open(str(workdir.joinpath('audio_pipe')), 'wb')
+    pump = PumpOut(str(workdir.joinpath('audio_pipe')))
     print("pipe open")
 
     # Watch for new wav files in the working directory
     observer = Observer()
-    observer.schedule(EventHandler(), str(workdir), recursive=False)
+    observer.schedule(EventHandler(), str(workdir), recursive=True)
     observer.start()
 
     try:
         aioloop = asyncio.get_event_loop()
+        asyncio.Task(pump.fill_silence())
         request_more(0)
         aioloop.run_forever()
     except KeyboardInterrupt:

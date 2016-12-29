@@ -18,10 +18,10 @@ class AudioProducer:
     def __init__(self):
         self.i = 0
         
-    def produce(self, text, args):
+    def produce(self, text, args, outdir):
         print(text)
         call(['espeak',
-            '-w', str(workdir.joinpath('out'+str(self.i)+'.wav')),
+            '-w', str(outdir.joinpath('out'+str(self.i)+'.wav')),
             text] + args)
         self.i += 1
 
@@ -35,17 +35,17 @@ def main():
 
     socket.recv()
     line_of_dialog = 'Hello, how are you?'
-    text2speech.produce(line_of_dialog, voice2)
+    text2speech.produce(line_of_dialog, voice2, workdir.joinpath('R'))
     socket.recv()
 
     while True:
         line_of_dialog = chatbot1.get_response(line_of_dialog).text
-        text2speech.produce(line_of_dialog, voice1)
+        text2speech.produce(line_of_dialog, voice1, workdir.joinpath('L'))
         
         socket.recv()
 
         line_of_dialog = chatbot2.get_response(line_of_dialog).text
-        text2speech.produce(line_of_dialog, voice2)
+        text2speech.produce(line_of_dialog, voice2, workdir.joinpath('R'))
 
         socket.recv()
 
