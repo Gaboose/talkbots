@@ -26,8 +26,14 @@ class AudioProducer:
         self.i += 1
 
 def main():
-    chatbot1 = ChatBot('UK',read_only=True,database='bot1.db')
-    chatbot2 = ChatBot('US',read_only=True,database='bot2.db')
+    chatbot1 = ChatBot('UK',
+                       read_only=True,
+                       storage_adapter='chatterbot.storage.MongoDatabaseAdapter',
+                       database='bot1')
+    chatbot2 = ChatBot('US',
+                       read_only=True,
+                       storage_adapter='chatterbot.storage.MongoDatabaseAdapter',
+                       database='bot2')
     voice1 = ['-v', 'en-uk', '-p', '100', '-s', '140']
     voice2 = ['-v', 'en-us', '-p', '40', '-s', '160']
 

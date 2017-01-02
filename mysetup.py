@@ -18,7 +18,8 @@ def process_corpus():
         chatbot = chatterbot.ChatBot(
             'Ron',
             trainer='chatterbot.trainers.ChatterBotCorpusTrainer',
-            database=name+'.db'
+            storage_adapter='chatterbot.storage.MongoDatabaseAdapter',
+            database=name
         )
         chatbot.train("corpus."+name)
 
