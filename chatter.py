@@ -34,10 +34,11 @@ def main():
                        read_only=True,
                        storage_adapter='chatterbot.storage.MongoDatabaseAdapter',
                        database='bot2')
-    voice1 = ['-v', 'en-uk', '-p', '100', '-s', '140']
-    voice2 = ['-v', 'en-us', '-p', '40', '-s', '160']
+    voice1 = ['-v', 'en-uk', '-p', '100', '-s', '120']
+    voice2 = ['-v', 'en-us', '-p', '40', '-s', '130']
 
     text2speech = AudioProducer()
+    timer = Timer(10*60)
 
     socket.recv()
     line_of_dialog = 'Hello, how are you?'
@@ -50,10 +51,26 @@ def main():
         
         socket.recv()
 
-        line_of_dialog = chatbot2.get_response(line_of_dialog).text
+        if timer.tick():
+            line_of_dialog = chatbot2.storage.get_random().text
+            print('## Next sentence will be picked at random ##')
+        else:
+            line_of_dialog = chatbot2.get_response(line_of_dialog).text
         text2speech.produce(line_of_dialog, voice2, workdir.joinpath('R'))
 
         socket.recv()
+
+import time
+class Timer:
+    def __init__(self, interval):
+        self.interval = interval
+        self.next = self.interval
+    def tick(self):
+        now = time.time()
+        if now > self.next:
+            self.next = now + self.interval
+            return True
+        return False
 
 if __name__ == '__main__':
 
