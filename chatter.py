@@ -2,6 +2,7 @@ from chatterbot import ChatBot
 import chatterbot.trainers
 import time
 from subprocess import call
+import sys
 
 __doc__ = """
 Creates wav files with chatterbot and espeak and puts them into
@@ -38,7 +39,11 @@ def main():
     voice2 = ['-v', 'en-us', '-p', '40', '-s', '130']
 
     text2speech = AudioProducer()
-    timer = Timer(10*60)
+
+    if len(sys.argv) > 1:
+        timer = Timer(int(sys.argv[1]))
+    else:
+        timer = Timer(5*60)
 
     socket.recv()
     line_of_dialog = 'Hello, how are you?'

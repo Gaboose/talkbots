@@ -28,4 +28,8 @@ printf 'use admin\ndb.shutdownServer()' | mongo
 # docker run -it --rm -e STREAM_TARGET=192.168.0.16 gaboose/talkbots
 ENV STREAM_TARGET 172.17.0.1
 
-CMD mongod & ./scripts/wait-mongo.sh && (python3 chatter.py & python3 wav_pump.py & ./gst-pipeline.sh)
+# chatter.py parameter. Output a random line every this many seconds.
+# Override with -e BREAKOUT_SECONDS=60
+ENV BREAKOUT_SECONDS 300
+
+CMD mongod & ./scripts/wait-mongo.sh && (python3 chatter.py ${BREAKOUT_SECONDS} & python3 wav_pump.py & ./gst-pipeline.sh)
